@@ -78,6 +78,28 @@ PRODUCT_COMPANIES = {
     "zoho",
 }
 
+
+def is_service_company(c: str) -> bool:
+    c = norm(c)
+    service_keywords = [
+        "accenture", "capgemini", "cognizant", "hcl", "infosys", "mindtree", 
+        "mphasis", "tcs", "tata consultancy", "tech mahindra", "wipro", 
+        "cts", "l&t infotech", "ltimindtree", "ust global", "dxc technology"
+    ]
+    return any(kw in c for kw in service_keywords)
+
+
+def is_product_company(c: str) -> bool:
+    c = norm(c)
+    product_keywords = [
+        "amazon", "apple", "browserstack", "cred", "dream11", "freshworks", "glance", 
+        "google", "haptik", "inmobi", "krutrim", "linkedin", "meesho", "meta", 
+        "microsoft", "netflix", "nykaa", "observe.ai", "ola", "paytm", "phonepe", 
+        "pinecone", "policybazaar", "postman", "razorpay", "sarvam ai", "swiggy", 
+        "uber", "yellow.ai", "zomato", "zoho"
+    ]
+    return any(kw in c for kw in product_keywords)
+
 PREFERRED_LOCATIONS = {
     "pune": 1.0,
     "noida": 1.0,
@@ -324,7 +346,7 @@ def product_company_score(candidate: dict[str, Any]) -> tuple[float, bool, bool]
     companies = [norm(role.get("company", "")) for role in candidate.get("career_history", [])]
     industries = [norm(role.get("industry", "")) for role in candidate.get("career_history", [])]
     current_industry = norm(candidate["profile"].get("current_industry", ""))
-    has_product = any(c in PRODUCT_COMPANIES for c in companies) or current_industry in {
+    has_product = any(is_product_company(c) for c in companies) or current_industry in {
         "ai/ml",
         "conversational ai",
         "e-commerce",
@@ -334,7 +356,7 @@ def product_company_score(candidate: dict[str, Any]) -> tuple[float, bool, bool]
         "saas",
         "software",
     }
-    services_only = bool(companies) and all(c in SERVICES_COMPANIES for c in companies)
+    services_only = bool(companies) and all(is_service_company(c) for c in companies)
     if has_product:
         score = 1.0
     elif any(ind in {"software", "saas", "ai/ml", "fintech", "e-commerce"} for ind in industries):
@@ -524,6 +546,20 @@ def trap_penalty(candidate: dict[str, Any], blob: str, skill_counts: dict[str, i
         penalties += 0.06
         reasons.append("short tenures")
 
+    # Title-chasers: short tenures with climbing senior/staff titles
+    if len(roles) >= 3:
+        total_months_roles = sum(int(role.get("duration_months", 0) or 0) for role in roles)
+        avg_tenure = total_months_roles / len(roles)
+        if avg_tenure < 18.0:
+            climbing_titles = 0
+            for role in roles:
+                t = norm(role.get("title", ""))
+                if "senior" in t or "staff" in t or "lead" in t or "principal" in t:
+                    climbing_titles += 1
+            if climbing_titles >= 2:
+                penalties += 0.08
+                reasons.append("title-chaser signal")
+
     signals = candidate.get("redrob_signals", {})
     last_active = parse_date(signals.get("last_active_date"))
     inactive_days = 365 if last_active is None else max(0, (REFERENCE_DATE - last_active).days)
@@ -547,7 +583,34 @@ def score_candidate(candidate: dict[str, Any]) -> CandidateScore:
     blob = text_blob(candidate)
 
     t_score, title_reason = title_score(profile.get("current_title", ""))
-    exp = experience_score(float(profile.get("years_of_experience", 0.0)))
+    total_exp = float(profile.get("years_of_experience", 0.0))
+    exp_score = experience_score(total_exp)
+
+    # Calculate ML-specific experience
+    ml_exp = 0.0
+    for role in candidate.get("career_history", []):
+        t = norm(role.get("title", ""))
+        is_ml = (
+            "ai" in t or "machine learning" in t or "ml" in t or "nlp" in t or
+            "search" in t or "recommendation" in t or "deep learning" in t or
+            "data scientist" in t or "information retrieval" in t
+        )
+        if any(nt in t for nt in NONTECH_TITLES):
+            is_ml = False
+        if is_ml:
+            ml_exp += (int(role.get("duration_months", 0) or 0) / 12.0)
+
+    # Apply a boost for having 4+ years of actual ML experience
+    if ml_exp >= 4.0:
+        ml_exp_factor = 1.0
+    elif ml_exp >= 3.0:
+        ml_exp_factor = 0.8
+    elif ml_exp >= 2.0:
+        ml_exp_factor = 0.6
+    else:
+        ml_exp_factor = 0.4
+
+    exp = 0.65 * exp_score + 0.35 * ml_exp_factor
     career, career_hits = career_signal_score(blob)
     skills, matched_skills, skill_counts = skill_signal(candidate)
     product, has_product, services_only = product_company_score(candidate)
