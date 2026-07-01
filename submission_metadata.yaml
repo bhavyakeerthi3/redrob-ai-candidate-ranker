@@ -1,0 +1,52 @@
+team_name: "team_redrob_ranker"
+
+primary_contact:
+  name: "Bhavya Keerthi"
+  email: "itsbhavyakeerthi@gmail.com"
+  phone: "+91-XXXXXXXXXX"
+
+team_members:
+  - name: "Bhavya Keerthi"
+    email: "itsbhavyakeerthi@gmail.com"
+    role: "ML Engineer"
+
+github_repo: "https://github.com/bhavyakeerthi3/redrob-ai-candidate-ranker"
+sandbox_link: "Dockerfile included; build with docker build -t redrob-ranker ."
+reproduce_command: "python rank.py --candidates ./data/candidates.jsonl --out ./outputs/team_redrob_ranker.csv"
+
+compute:
+  platform: "Local Windows machine"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.14"
+  os: "Windows"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: false
+  pre_computation_time_minutes: 0
+
+ai_tools_used:
+  - "ChatGPT"
+
+ai_usage_summary: |
+  Used ChatGPT/Codex to inspect the challenge bundle, implement the ranker,
+  generate documentation, and validate the output. No hosted LLM or external
+  API is called by the ranking code.
+
+methodology_summary: |
+  Explainable hybrid ranker for the Senior AI Engineer JD. It streams JSONL
+  profiles and combines six feature families: title fit, career evidence for
+  production retrieval/ranking systems, trusted skill evidence, experience
+  band, product-company exposure, and behavioral availability. A trap layer
+  down-ranks keyword stuffing, non-target titles with AI skills, inactive
+  profiles, low recruiter response, thin expert skills, and implausible career
+  metadata. The system is deterministic, CPU-only, network-free, and emits
+  fact-grounded reasoning for every recommended candidate.
+
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true
+
